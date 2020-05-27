@@ -1,0 +1,69 @@
+const sql = require('mssql');
+const CC = require('./CoordConverter.js');
+const SqlUtils = require('./SqlUtils.js')
+
+const coordConverter =  new CC();
+ 
+const config = {
+    user: 'PCTO',  //Vostro user name
+    password: 'xxx123#', //Vostra password
+    server: "213.140.22.237",  //Stringa di connessione
+    database: 'Katmai', //(Nome del DB)
+}
+
+module.exports = class SqlUtils {
+
+    static connect(req, res, connectedCallback)
+{
+    sql.connect(config, (err) => {
+        if (err) console.log(err);  // ... error check
+        else connectedCallback(req,res); //callback da eseguire in caso di connessione avvenuta 
+    });
+}
+
+    static makeSqlRequest(req,res) {
+        let sqlRequest = new sql.Request();  //sqlRequest: oggetto che serve a eseguire le query
+        let q = `SELECT DISTINCT TOP (100) [GEOM].STAsText() FROM [Katmai].[dbo].[interventiMilano]`;
+        //eseguo la query e aspetto il risultato nella callback
+        sqlRequest.query(q, (err, result) => {SqlUtils.sendQueryResults(err,result,req,res)}); 
+    }
+    
+    static sendQueryResults(err, result, req, res)
+    {
+        if (err) console.log(err); // ... error checks
+        res.send(coordConverter.generateGeoJson(result.recordset));  //Invio il risultato al Browser
+    }
+
+    static ciVettRequest(req,res) {
+        let sqlRequest = new sql.Request();  
+        let foglio = req.params.foglio; 
+        let q = `SELECT INDIRIZZO, WGS84_X, WGS84_Y, CLASSE_ENE, EP_H_ND, CI_VETTORE, FOGLIO, SEZ
+        FROM [Katmai].[dbo].[interventiMilano]
+        WHERE FOGLIO = ${foglio}`
+        
+        sqlRequest.query(q, (err, result) => {SqlUtils.sendCiVettResult(err,result,req,res)}); 
+    }
+
+  static sendCiVettResult(err,result,req,res) {
+        if (err) console.log(err); 
+        res.send(result.recordset);  
+  }
+
+  static ciVettGeoRequest(req,res) {
+        let sqlRequest = new sql.Request();  
+        let x = Number(req.params.lng);
+        let y = Number(req.params.lat);
+        let r = Number(req.params.r);
+        let q = `SELECT INDIRIZZO, WGS84_X, WGS84_Y, CLASSE_ENE, EP_H_ND, CI_VETTORE, FOGLIO, SEZ
+        FROM [Katmai].[dbo].[interventiMilano]
+        WHERE WGS84_X > ${x} - ${r} AND 
+        WGS84_X < ${x} + ${r} AND
+        WGS84_Y > ${y} - ${r} AND 
+        WGS84_Y < ${y} + ${r}`
+        
+        console.log(q);
+        
+        sqlRequest.query(q, (err, result) => {SqlUtils.sendCiVettResult(err,result,req,res)}); 
+    }
+
+}
